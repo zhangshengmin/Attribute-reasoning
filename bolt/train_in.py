@@ -14,7 +14,7 @@ import json
 import random
 import time
 from torch.autograd import Variable
-from graphviz import Digraph
+# from graphviz import Digraph
 
 
 from crop_pic_sin import crop_and_filter_objects
@@ -22,14 +22,14 @@ from crop_pic_sin import crop_and_filter_objects
 
 from models.rel_models import OnClassify_v1
 # from demo import ImageTool
-from bolt.models.reasoning_in import Reasoning
-from bolt.models.reasoning_in import id2rel
-from bolt.models.reasoning_in import ImageTool
+from models.reasoning_in import Reasoning
+from models.reasoning_in import id2rel
+from models.reasoning_in import ImageTool
 from torch.utils.data import DataLoader, Dataset
 from torch.utils.tensorboard import SummaryWriter
 from torchvision.transforms import transforms
 import PIL
-from torchviz import make_dot
+# from torchviz import make_dot
 
 DATA_INPUT = '/home/ur/Desktop/attribute_infer/bolt/data-end2end-triple/true_mul_bolt_crops/'
 
@@ -88,7 +88,7 @@ def get_args_parser():
                         help='Name of model to train')
     parser.add_argument('--cutmix_minmax', type=float, nargs='+', default=None,
                         help='cutmix min/max ratio, overrides alpha and enables cutmix if set (default: None)')
-    parser.add_argument('--finetune', default='/yq/ddd/intel_amm_2/model/mae_pretrain_vit_base.pth',
+    parser.add_argument('--finetune', default='/home/ur/Desktop/attribute_infer/bolt/model/mae_pretrain_vit_base.pth',
                         help='finetune from checkpoint')
     parser.add_argument('--drop_path', type=float, default=0.1, metavar='PCT',
                         help='Drop path rate (default: 0.1)')
@@ -155,13 +155,13 @@ def train(model):
         FN = 0
         best_score = 0.3
         for i in index_list:
-            (img, op_list, answer, type) = train_set[i]
+            (img, op_list, answer, type,img_file_path) = train_set[i]
             # print(op_list)
             # print(op_list)
             # optimizer.zero_grad()
             # start_time = time.time()
             # print("start time begin")
-            y_pred = model(op_list, img, mode='train')
+            y_pred = model(op_list, img,img_file_path, mode='train')
 
             # dot = make_dot(y_pred, params=dict(model.named_parameters()))
             # dot.format = 'png'
@@ -171,6 +171,9 @@ def train(model):
             # writer.close()
 
             loss = loss_function(y_pred, answer)
+            print("answer:",answer)
+            print("y_pred:",y_pred)
+            print("loss:",loss)
             loss.requires_grad_(True)
 
             # make_dot(loss).view()
@@ -205,8 +208,8 @@ def train(model):
         # ------------------- test model ---------------
         # test_set = train_set
         for i in range(test_set.len):
-            (img, op_list, answer, type) = test_set[i]
-            y_pred = model(op_list, img, mode='train')
+            (img, op_list, answer, type,img_file_path) = test_set[i]
+            y_pred = model(op_list, img,img_file_path, mode='train')
             loss = loss_function(y_pred, answer)
 
             # pred_tot += y_pred.sum().data
@@ -220,9 +223,9 @@ def train(model):
 
             test_loss += loss.data
 
-            y_pred = model(op_list, img,  mode='test')
+            y_pred = model(op_list, img,img_file_path,  mode='test')
             # acc compute
-            if (y_pred - answer).sum() == 0 :
+            if y_pred.equal(answer) :
                 acc += 1
             # if ((y_pred - answer).sum() == 0 and answer.sum() == 1):
             #     acc += 1
@@ -288,7 +291,7 @@ def train(model):
 
 
 def iii():
-    model = torch.load('./checkpoint/reason_model_on_right_0.98_4neg.pkl', map_location=torch.device(device))
+    model = torch.load('./checkpoint/reason_model_zero_1.0_4neg.pkl', map_location=torch.device(device))
     # model = torch.load('./checkpoint/reason_model_on.pkl',map_location=torch.device(device))
     infer_checkpoint(model)
 
@@ -373,19 +376,19 @@ def infer_checkpoint(model):
     ]
 
 
-    img_list = list(range(1, 54))
+    img_list = list(range(400, 430))
     # img_list = [1]
     print('[INFO]---------- 评分测试 ---------')
     for img_id in img_list:
-        if img_id == 43:
-            continue
+        # if img_id == 43:
+        #     continue
         print('[INFO]---case', img_id, '----')
-        img_file = DATA_INPUT + 'cross_hex_bolt/' + str(img_id).zfill(3) + '.jpg'
+        img_file_path = DATA_INPUT + 'out_hex_bolt/' + str(img_id).zfill(3) + '.jpg'
         # ann_file = DATA_INPUT + 'Annotation/shut-' + str(img_id).zfill(3) + '.xml'
         # print(img_file)
-        img = imgtool.load_img(img_file)
-        y_pred = model(op_list, img, mode='infer')
-        print('[INFO] image:', img_id, 'check score', round(y_pred.data.item(), 3))
+        img = imgtool.load_img(img_file_path)
+        y_pred = model(op_list, img,img_file_path, mode='infer')
+        print('[INFO] image:', img_id, 'attribute',y_pred)
 
 
 class TripleDataset(Dataset):
@@ -453,11 +456,10 @@ class TripleDataset(Dataset):
             #     "answer": triple[2],  # 答案就是triple中的subject
             #     "type": "index"
             # }
-            attribute_list=torch.zero((3,4))
-            # for i in range(3):
-            #     attribute_list[i][triple[i+1]]=1
+            attribute_list=torch.zeros((1,4))
             attribute_list[0][triple[1]]=1
             attribute_list=torch.reshape(attribute_list, (1, -1))
+            print(" attribute_list:", attribute_list)
             question = {
                 "image_path": triple[0],
                 "op_list": [
@@ -490,10 +492,10 @@ class TripleDataset(Dataset):
     def __getitem__(self, index):
         img_path = self.questions[index]['image_path']
 
-        img_file = DATA_INPUT + img_path
+        img_file_path = DATA_INPUT + img_path
         # ann_file = DATA_INPUT + 'Annotation/shut-' + str(img_id).zfill(3) + '.xml'
         # print(img_file)
-        img, ann = imgtool.load_img(img_file)
+        img = imgtool.load_img(img_file_path)
         op_list = self.questions[index]['op_list']
         type = self.questions[index]['type']
 
@@ -518,7 +520,7 @@ class TripleDataset(Dataset):
         #         else:
         #             id_b = opi['param']
 
-        return (img, op_list, answer, type)
+        return (img, op_list, answer, type,img_file_path)
 
 
     # def __getitem__(self, index):

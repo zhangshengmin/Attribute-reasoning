@@ -5,7 +5,7 @@ import xml.etree.ElementTree as ET
 import torch.nn as nn
 from PIL.ImageDraw import ImageDraw
 from PIL.ImageFont import ImageFont
-from timm.data.mixup import Mixup
+# from timm.data.mixup import Mixup
 
 import time
 from crop_pic_sin import crop_and_filter_objects
@@ -17,7 +17,7 @@ from models.engine_finetune import train_one_epoch
 from torch.utils.data import DataLoader, Dataset
 from torchvision.transforms import transforms
 from PIL import Image
-from torchviz import make_dot
+# from torchviz import make_dot
 from  models import models_vit
 
 max_attribute_num = 3
@@ -31,9 +31,9 @@ relate_matrix = None
 
 attribute2id = {'in_contour': 0, 'out_contour': 1, 'corrosion': 2}
 # concept2id_name = {'电流表最小刻度(ammeter_min_scale)': 0, '电流表和电压表指针(pointer)_a': 1,  '电流表(ammeter)': 2, '其他(others)': 3}
-concept2id_name = {'in_contour': {'plane': 0,'hex_groove': 1,'cross_groove': 2,'star_groove': 3},
-'out_contour': {'hex': 0,'round': 1,'others_1': 2,'others_2': 3},
-'corrosion': {'no_corrosion': 0,'small_corrosion': 1,'medium_corrosion': 2,'severe_corrosion': 3}}
+concept2id_name = {0: {'plane': 0,'hex_groove': 1,'cross_groove': 2,'star_groove': 3},
+1: {'hex': 0,'round': 1,'others_1': 2,'others_2': 3},
+2: {'no_corrosion': 0,'small_corrosion': 1,'medium_corrosion': 2,'severe_corrosion': 3}}
 # concept2id_name = {'bolt': 0,'其他(others)': 1}
 rel2id = {'zero': 0, 'unzero': 1}
 id2rel = {0: 'zero', 1: 'unzero'}
@@ -55,7 +55,7 @@ class Reasoning(nn.Module):
         self.exec = Executor(args)
         self.imgtool = ImageTool()
 
-    def forward(self, dcl_op_list, img, mode):
+    def forward(self, dcl_op_list, img,img_file_path, mode):
         '''
         说明：对于每个operation的执行结果，统一都是采用一个一维的行向量进行表示，行向量中每个元素表示其所对应的物体在该步骤之后被选中的概率
         （具体见The neuro-symbolic concept learner, Sec 3.1 Quasi-symbolic program execution部分解释）
@@ -67,7 +67,7 @@ class Reasoning(nn.Module):
         # print(obj_name_list)
 
         exec = self.exec
-        exec.init(img, mode)
+        exec.init(img,img_file_path, mode)
 
         buffer = []
         step = 0
@@ -86,9 +86,9 @@ class Reasoning(nn.Module):
                 # self.imgtool.save_img(file, img)
                 # continue
             elif op == 'filter_nearest_obj':
-                buffer.append(exec.filter_nearest_obj(buffer[-1], param))
+                buffer.append(exec.filter_nearest_obj(buffer[-1]))
             elif op == 'obj_attibute':
-                buffer.append(exec.obj_attibute(buffer[-1], param))
+                buffer.append(exec.obj_attibute(buffer[-1]))
             elif op == 'attibute2sleeve':
                 buffer.append(exec.attibute2sleeve(buffer[-1], param))
             elif op == 'filter_name':
@@ -129,17 +129,18 @@ class Reasoning(nn.Module):
                 buffer.append(exec.exist(buffer[-1]))
             else:
                 print('[!!!ERROR!!!] operator not exist!')
-            if (mode == 'infer'):
-                # print('[INFO]', op, param,  buffer[-1].data)
-                print('[INFO]', op, param, end=' ')
-                step_score = exec.exist(buffer[-1])
-                if step_score <= 0.5 and flag_neg == False:
-                    print('<---- Bad Step!', end=' ')
-                    flag_neg = True
-                    # print('[INFO] 错误操作', op, param)
-                    # return exec.exist(buffer[-1])
-                print('')
+            # if (mode == 'infer'):
+            #     # print('[INFO]', op, param,  buffer[-1].data)
+            #     print('[INFO]', op, param, end=' ')
+            #     step_score = exec.exist(buffer[-1])
+            #     if step_score <= 0.5 and flag_neg == False:
+            #         print('<---- Bad Step!', end=' ')
+            #         flag_neg = True
+            #         # print('[INFO] 错误操作', op, param)
+            #         # return exec.exist(buffer[-1])
+            #     print('')
         answer = buffer[-1]
+        # print("answer:",answer)
         return answer
 
 
@@ -231,7 +232,7 @@ class Predicator(nn.Module):
     #     # return pred
     #     return y_pred
 
-    def attributes_classify(self, img):
+    def attributes_classify(self, img_file_path):
         '''
         if ammeter's pointer return to 0
         implement by network
@@ -266,7 +267,7 @@ class Predicator(nn.Module):
 
         # crop_and_filter_objects(pic, xml_path)
         # pic_1_path = "/yq/ddd/intel_amm_2/data-end2end-triple/crop_images/" + name_t + '.jpg'
-        pic_1 = Image.open(img)
+        pic_1 = Image.open(img_file_path)
         pic_ten = transform(pic_1)
         pic_ten = pic_ten.unsqueeze(0)
 
@@ -275,10 +276,11 @@ class Predicator(nn.Module):
         #     pic_ten = mixup_fn(pic_ten)
 
         y_pre_in = self.net_in(pic_ten.to(device, torch.float))
+        y_pre_in = nn.functional.softmax(y_pre_in,dim=1)
         # y_pre_out = self.net_out(pic_ten.to(device, torch.float))
         # y_pre_cor = self.net_cor(pic_ten.to(device, torch.float))
-        y_pre_out = torch.zero((1,4))
-        y_pre_cor = torch.zero((1,4))
+        y_pre_out = torch.zeros((1,4)).to(device, torch.float)
+        y_pre_cor = torch.zeros((1,4)).to(device, torch.float)
 
         # y_pre[ y_pre>0.5]=1
         # y_pre[ y_pre<0.5]=0
@@ -297,6 +299,7 @@ class Predicator(nn.Module):
         # y_pred = torch.tensor([[max_val]])
         y_pred=torch.cat((y_pre_in, y_pre_out,y_pre_cor),dim=0)
         y_pred = torch.reshape(y_pred, (3, -1))
+        # print( y_pred)
 
         # loss_1 = y_pred
         # make_dot(loss_1).view()
@@ -447,8 +450,8 @@ class Executor(nn.Module):
         # # print(concept_matrix)
         # self._make_relate_matrix(ann)
 
-    def init(self,img, mode):
-        self.concept_matrix = self._make_concept_matrix(img, mode)
+    def init(self,img,img_file_path, mode):
+        self.concept_matrix = self._make_concept_matrix(img,img_file_path, mode)
         # print(concept_matrix)
         # self.relate_matrix = self._make_relate_matrix(ann, name_t, id_a, id_b, mode)
 
@@ -493,12 +496,17 @@ class Executor(nn.Module):
     def obj_attibute(self, selected):
         '''
         '''
-        attibute_vec=torch.zeros(12, requires_grad=False)
+        attibute_vec=torch.zeros(4)
         i=0
-        for attritube_index in range(min(max_attribute_num, len(attribute2id))):
-            for concept_index in range(min(max_concept_num, len(concept2id_name[attritube_index]))):
-                attibute_vec[i]= self._get_concept_obj_mask(attritube_index,concept_index,selected)
+        # for attritube_index in range(min(max_attribute_num, len(attribute2id))):
+        #     for concept_index in range(min(max_concept_num, len(concept2id_name[attritube_index]))):
+        #         attibute_vec[i]= self._get_concept_obj_mask(attritube_index,concept_index,selected)
+        #         i+=1
+        
+        for concept_index in range(4):
+                attibute_vec[i]= self._get_concept_obj_mask(0,concept_index,selected)
                 i+=1
+        attibute_vec=torch.reshape(attibute_vec, (1, -1))
         return attibute_vec
     def exist(self, selected):
         '''
@@ -527,12 +535,14 @@ class Executor(nn.Module):
     def union(self, selected1, selected2):
         return torch.max(selected1, selected2)
 
-    def _make_concept_matrix(self, img, mode):
+    def _make_concept_matrix(self, img,img_file_path, mode):
         # global concept_matrix
         concept_matrix = torch.zeros((max_attribute_num, max_concept_num, max_obj_num), requires_grad=False)   #max_obj_num=60
         # 0 dim is for 'name' concept
         index=0
-        res = self.predicator.attributes_classify(img)
+        res = self.predicator.attributes_classify(img_file_path)
+        # print(len(attribute2id))
+        # print(len(concept2id_name[0]))
         for attritube_index in range(min(max_attribute_num, len(attribute2id))):
             for concept_index in range(min(max_concept_num, len(concept2id_name[attritube_index]))):
                 for obj_index in range(max_obj_num):
@@ -542,7 +552,7 @@ class Executor(nn.Module):
                     if mode == 'test':
                                 # res = res.argmax(dim=1)
                                 # relate_matrix[0][a_index][b_index] = res[0][0]
-                                if (res[attritube_index][concept_index].data >= 0.5):
+                                if (res[attritube_index][concept_index].data >= 0.9):
                                     concept_matrix[attritube_index][concept_index][obj_index] = 1 # [a_index][b_index]:a_index索引物体相对于b_index索引物体为up关系
                                 else:
                                     concept_matrix[attritube_index][concept_index][obj_index] = 0
@@ -557,7 +567,7 @@ class Executor(nn.Module):
         # # 2 dim is for 'balance' concept
         # for obj_index in range(min(max_obj_num, len(ann))):
         #     concept_matrix[2][0][obj_index] = 1
-        # print(concept_matrix)
+        # print("concept_matrix:",concept_matrix)
 
         return concept_matrix
 
