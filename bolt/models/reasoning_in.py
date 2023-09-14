@@ -1,3 +1,4 @@
+from email.mime import image
 import torch
 import numpy as np
 import os, json, cv2, random
@@ -17,7 +18,7 @@ from models.engine_finetune import train_one_epoch
 from torch.utils.data import DataLoader, Dataset
 from torchvision.transforms import transforms
 from PIL import Image
-# from torchviz import make_dot
+from torchviz import make_dot
 from  models import models_vit
 
 max_attribute_num = 3
@@ -88,7 +89,7 @@ class Reasoning(nn.Module):
             elif op == 'filter_nearest_obj':
                 buffer.append(exec.filter_nearest_obj(buffer[-1]))
             elif op == 'obj_attibute':
-                buffer.append(exec.obj_attibute(buffer[-1]))
+                buffer.append(exec.obj_attibute(buffer[-1], param))
             elif op == 'attibute2sleeve':
                 buffer.append(exec.attibute2sleeve(buffer[-1], param))
             elif op == 'filter_name':
@@ -232,7 +233,7 @@ class Predicator(nn.Module):
     #     # return pred
     #     return y_pred
 
-    def attributes_classify(self, img_file_path):
+    def attributes_classify(self, img,img_file_path):
         '''
         if ammeter's pointer return to 0
         implement by network
@@ -262,13 +263,20 @@ class Predicator(nn.Module):
             transforms.ToTensor(),
             transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
         ])
+        # transform = transforms.Compose([
+        #     transforms.RandomResizedCrop(224),
+        #                              transforms.RandomHorizontalFlip(),
+        #                              transforms.ToTensor(),
+        #                              transforms.Normalize([0.5, 0.5, 0.5], [0.5, 0.5, 0.5])
+        # ])
         # start_time_classify = time.time()
 
 
         # crop_and_filter_objects(pic, xml_path)
         # pic_1_path = "/yq/ddd/intel_amm_2/data-end2end-triple/crop_images/" + name_t + '.jpg'
-        pic_1 = Image.open(img_file_path)
-        pic_ten = transform(pic_1)
+        # pic_1 = Image.open(img_file_path)
+        # pic_1.show()
+        pic_ten = transform(img)
         pic_ten = pic_ten.unsqueeze(0)
 
 
@@ -276,11 +284,13 @@ class Predicator(nn.Module):
         #     pic_ten = mixup_fn(pic_ten)
 
         y_pre_in = self.net_in(pic_ten.to(device, torch.float))
+        # max_val,index = torch.max(y_pre_in,dim=1)
+        # make_dot(y_pre_in).view()
         y_pre_in = nn.functional.softmax(y_pre_in,dim=1)
         # y_pre_out = self.net_out(pic_ten.to(device, torch.float))
         # y_pre_cor = self.net_cor(pic_ten.to(device, torch.float))
-        y_pre_out = torch.zeros((1,4)).to(device, torch.float)
-        y_pre_cor = torch.zeros((1,4)).to(device, torch.float)
+        y_pre_out = torch.zeros((1,4))
+        y_pre_cor = torch.zeros((1,4))
 
         # y_pre[ y_pre>0.5]=1
         # y_pre[ y_pre<0.5]=0
@@ -297,8 +307,16 @@ class Predicator(nn.Module):
         # dot.format = 'png'
         # dot.render(filename='graph_2')
         # y_pred = torch.tensor([[max_val]])
-        y_pred=torch.cat((y_pre_in, y_pre_out,y_pre_cor),dim=0)
-        y_pred = torch.reshape(y_pred, (3, -1))
+        # y_pred=torch.cat((y_pre_in, y_pre_out,y_pre_cor),dim=0)
+        y_pre_in = torch.reshape(y_pre_in, (1, -1))
+        y_pre_out = torch.reshape(y_pre_out, (1, -1))
+        y_pre_cor = torch.reshape(y_pre_cor, (1, -1))
+        y_pred=[]
+        y_pred.append(y_pre_in)
+        y_pred.append(y_pre_out )
+        y_pred.append(y_pre_cor)
+        # print(y_pred[1])
+
         # print( y_pred)
 
         # loss_1 = y_pred
@@ -313,8 +331,8 @@ class Predicator(nn.Module):
         # print("classify_time = " + run_time)
 
         # pred = y_pred.softmax(dim=1)
-        # return pred
         return y_pred
+        # return y_pred,max_val,index
 
 
 
@@ -348,7 +366,8 @@ class ImageTool():
         ])
 
     def load_img(self, img_file):
-        img = cv2.imread(img_file)
+        # img = cv2.imread(img_file)
+        img = Image.open(img_file)
         # tmp = PIL.Image.open(img_file)
         # img = self.transform(tmp)
 
@@ -492,22 +511,29 @@ class Executor(nn.Module):
     def filter_nearest_obj(self, selected):
         '''
         '''
-        return 0
-    def obj_attibute(self, selected):
+        mask = selected * 1
+        return mask
+    def obj_attibute(self, selected, concept_index):
         '''
         '''
-        attibute_vec=torch.zeros(4)
-        i=0
+        # attibute_vec=torch.zeros(4)
+        # i=0
         # for attritube_index in range(min(max_attribute_num, len(attribute2id))):
         #     for concept_index in range(min(max_concept_num, len(concept2id_name[attritube_index]))):
         #         attibute_vec[i]= self._get_concept_obj_mask(attritube_index,concept_index,selected)
         #         i+=1
         
-        for concept_index in range(4):
-                attibute_vec[i]= self._get_concept_obj_mask(0,concept_index,selected)
-                i+=1
-        attibute_vec=torch.reshape(attibute_vec, (1, -1))
-        return attibute_vec
+        # for con_index in range(4):
+        #         attibute_vec[i]= self._get_concept_obj_mask(0,con_index,selected)
+        #         i+=1
+        # attibute_vec=torch.reshape(attibute_vec, (1, -1))
+
+        mask= self._get_concept_mask(0,concept_index)
+        mask = selected * mask
+        # attibute_vec=torch.zeros(4)
+        # attibute_vec[concept_index]=mask[0].data
+        # attibute_vec=torch.reshape(attibute_vec, (1, -1))
+        return mask
     def exist(self, selected):
         '''
         '''
@@ -540,7 +566,8 @@ class Executor(nn.Module):
         concept_matrix = torch.zeros((max_attribute_num, max_concept_num, max_obj_num), requires_grad=False)   #max_obj_num=60
         # 0 dim is for 'name' concept
         index=0
-        res = self.predicator.attributes_classify(img_file_path)
+        res= self.predicator.attributes_classify(img,img_file_path)
+        # print(res)
         # print(len(attribute2id))
         # print(len(concept2id_name[0]))
         for attritube_index in range(min(max_attribute_num, len(attribute2id))):
@@ -552,13 +579,14 @@ class Executor(nn.Module):
                     if mode == 'test':
                                 # res = res.argmax(dim=1)
                                 # relate_matrix[0][a_index][b_index] = res[0][0]
-                                if (res[attritube_index][concept_index].data >= 0.9):
+                                if (res[attritube_index][0][concept_index].data >= 0.5):
+                                # if concept_index==index[0].data and res[attritube_index][concept_index].data >= 0.01:
                                     concept_matrix[attritube_index][concept_index][obj_index] = 1 # [a_index][b_index]:a_index索引物体相对于b_index索引物体为up关系
                                 else:
                                     concept_matrix[attritube_index][concept_index][obj_index] = 0
 
                     elif mode == 'train' or mode == 'infer':
-                        concept_matrix[attritube_index][concept_index][obj_index] = res[attritube_index][concept_index]
+                        concept_matrix[attritube_index][concept_index][obj_index] = res[attritube_index][0][concept_index]
                     # if concept2id_name[ann[obj_index]['name']] == concept_index:
                     #     concept_matrix[0][concept_index][obj_index] = 1
         # 1 dim for 'obj local index'

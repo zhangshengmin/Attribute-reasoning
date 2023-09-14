@@ -159,7 +159,7 @@ class Predicator(nn.Module):
         #     global_pool=args.global_pool,
         # )
         # self.net_in = OnClassify_v3(args)
-        # self.net_in_model = torch.load('./checkpoint/4_97.pkl',map_location=torch.device(device))
+        self.net_in_model = torch.load('./checkpoint/4_97.pkl',map_location=torch.device(device))
         self.net_out = OnClassify_v3(args)
         # self.net_cor = OnClassify_v3(args)
 
@@ -275,20 +275,20 @@ class Predicator(nn.Module):
 
         # crop_and_filter_objects(pic, xml_path)
         # pic_1_path = "/yq/ddd/intel_amm_2/data-end2end-triple/crop_images/" + name_t + '.jpg'
-        # pic_1 = Image.open(img_file_path)
+        pic_1 = Image.open(img_file_path)
         # pic_1.show()
-        pic_ten = transform(img)
+        pic_ten = transform(pic_1)
         pic_ten = pic_ten.unsqueeze(0)
 
-        # op_list = [
-        #     {'op': 'objects', 'param': ''},
-        #     {'op':'filter_nearest_obj', 'param': ''},
-        #     {'op':'obj_attibute', 'param': ''}
-        # ]
+        op_list = [
+            {'op': 'objects', 'param': ''},
+            {'op':'filter_nearest_obj', 'param': ''},
+            {'op':'obj_attibute', 'param': ''}
+        ]
         # if mixup_fn is not None:
         #     pic_ten = mixup_fn(pic_ten)
-        # y_pre_in =  self.net_in_model(op_list, img,img_file_path, mode='test')
-        y_pre_in = torch.zeros((1,4))
+        y_pre_in =  self.net_in_model(op_list, img,img_file_path, mode='test')
+        # y_pre_in = torch.zeros((1,4))
         y_pre_out = self.net_out(pic_ten.to(device, torch.float))
         # max_val,index = torch.max(y_pre_in,dim=1)
         # make_dot(y_pre_in).view()
@@ -371,8 +371,7 @@ class ImageTool():
         ])
 
     def load_img(self, img_file):
-        # img = cv2.imread(img_file)
-        img = Image.open(img_file)
+        img = cv2.imread(img_file)
         # tmp = PIL.Image.open(img_file)
         # img = self.transform(tmp)
 
@@ -517,28 +516,28 @@ class Executor(nn.Module):
         '''
         '''
         mask = selected * 1
-        return mask
+        return 0
     def obj_attibute(self, selected, concept_index):
         '''
         '''
-        # attibute_vec=torch.zeros(4)
-        # i=0
+        attibute_vec=torch.zeros(4)
+        i=0
         # for attritube_index in range(min(max_attribute_num, len(attribute2id))):
         #     for concept_index in range(min(max_concept_num, len(concept2id_name[attritube_index]))):
         #         attibute_vec[i]= self._get_concept_obj_mask(attritube_index,concept_index,selected)
         #         i+=1
         
-        # for con_index in range(4):
-        #         attibute_vec[i]= self._get_concept_obj_mask(1,con_index,selected)
-        #         i+=1
-        # attibute_vec=torch.reshape(attibute_vec, (1, -1))
+        for con_index in range(4):
+                attibute_vec[i]= self._get_concept_obj_mask(1,con_index,selected)
+                i+=1
+        attibute_vec=torch.reshape(attibute_vec, (1, -1))
 
-        mask= self._get_concept_mask(1,concept_index)
-        mask = selected * mask
+        # mask= self._get_concept_mask(0,concept_index)
+        # mask = selected * mask
         # attibute_vec=torch.zeros(4)
         # attibute_vec[concept_index]=mask[0].data
         # attibute_vec=torch.reshape(attibute_vec, (1, -1))
-        return mask
+        return attibute_vec
     def exist(self, selected):
         '''
         '''

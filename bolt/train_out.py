@@ -22,9 +22,9 @@ from crop_pic_sin import crop_and_filter_objects
 
 from models.rel_models import OnClassify_v1
 # from demo import ImageTool
-from models.reasoning_in import Reasoning
-from models.reasoning_in import id2rel
-from models.reasoning_in import ImageTool
+from models.reasoning_out import Reasoning
+from models.reasoning_out import id2rel
+from models.reasoning_out import ImageTool
 from torch.utils.data import DataLoader, Dataset
 from torch.utils.tensorboard import SummaryWriter
 from torchvision.transforms import transforms
@@ -108,8 +108,8 @@ def get_args_parser():
 
 def train(model):
 
-    train_set = TripleDataset(DATA_INPUT + 'attribute_in_train.tsv')
-    test_set = TripleDataset(DATA_INPUT + 'attribute_in_test.tsv')  # use triple
+    train_set = TripleDataset(DATA_INPUT + 'attribute_out_base_in_train.tsv')
+    test_set = TripleDataset(DATA_INPUT + 'attribute_out_base_in_test.tsv')  # use triple
 
     lr = 0.001
     epoch_num = 100
@@ -295,9 +295,9 @@ def train(model):
 
 
 def iii():
-    attribute_in_dic={0:'plane',1:'hex_groove',2:'cross_groove',3:'star_groove'}
+    attribute_in_dic={0:'hex1',1:'round1',2:'hex2',3:'round2'}
     # model = torch.load('./checkpoint/reason_model_zero_1.0_4neg.pkl', map_location=torch.device(device))
-    model = torch.load('./checkpoint/net_in_img_97.pkl',map_location=torch.device(device))
+    model = torch.load('./checkpoint/net_out_img_95.pkl',map_location=torch.device(device))
     for i in range(len(attribute_in_dic)):
 
         infer_checkpoint(model,attribute_in_dic[i])
@@ -376,14 +376,14 @@ def infer_checkpoint(model,atribute_in):
     #         {'op':'exist', 'param': ''},
     # ]
 
-    
+  
 
-    attribute_in2bolt={'plane':'out_hex_bolt','hex_groove':'in_hex_bolt','cross_groove':'cross_hex_bolt','star_groove':'star_bolt'}
-    attribute_in2index={'plane':2,'hex_groove':1,'cross_groove':0,'star_groove':3}
+    attribute_in2bolt={'hex1':'out_hex_bolt','round1':'in_hex_bolt','hex2':'cross_hex_bolt','round2':'star_bolt'}
+    attribute_in2index={'hex1':0,'round1':1,'hex2':0,'round2':1}
     op_list = [
             {'op': 'objects', 'param': ''},
             {'op':'filter_nearest_obj', 'param': ''},
-            {'op':'obj_attibute', 'param': attribute_in2index[atribute_in]}
+            {'op':'obj_attibute', 'param':attribute_in2index[atribute_in]}
     ]
     img_list = list(range(400, 430))
     # img_list = [1]
@@ -398,8 +398,9 @@ def infer_checkpoint(model,atribute_in):
         # ann_file = DATA_INPUT + 'Annotation/shut-' + str(img_id).zfill(3) + '.xml'
         # print(img_file)
         img = imgtool.load_img(img_file_path)
-        # img_file_path=""
+        img_file_path=""
         y_pred = model(op_list, img,img_file_path, mode='test')
+        # print(y_pred)
         # max_val,index = torch.max(y_pred,dim=1)
         # print(index)
         tol_num+=1
@@ -583,9 +584,9 @@ if __name__ == "__main__":
     args = get_args_parser()
     args = args.parse_args()
     # Model Load
-    model_in = Reasoning(args)
-    for name, param in model_in.named_parameters():
+    model_out_base_in = Reasoning(args)
+    for name, param in model_out_base_in.named_parameters():
         print(name, param.size(), type(param))
-    # train(model_in) # 训练流程
+    # train(model_out_base_in) # 训练流程
     
     iii()  # 测试流程

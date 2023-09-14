@@ -22,9 +22,9 @@ from crop_pic_sin import crop_and_filter_objects
 
 from models.rel_models import OnClassify_v1
 # from demo import ImageTool
-from models.reasoning_in import Reasoning
-from models.reasoning_in import id2rel
-from models.reasoning_in import ImageTool
+from models.reasoning_out_base_in import Reasoning
+from models.reasoning_out_base_in import id2rel
+from models.reasoning_out_base_in import ImageTool
 from torch.utils.data import DataLoader, Dataset
 from torch.utils.tensorboard import SummaryWriter
 from torchvision.transforms import transforms
@@ -108,13 +108,13 @@ def get_args_parser():
 
 def train(model):
 
-    train_set = TripleDataset(DATA_INPUT + 'attribute_in_train.tsv')
-    test_set = TripleDataset(DATA_INPUT + 'attribute_in_test.tsv')  # use triple
+    train_set = TripleDataset(DATA_INPUT + 'attribute_out_base_in_train.tsv')
+    test_set = TripleDataset(DATA_INPUT + 'attribute_out_base_in_test.tsv')  # use triple
 
     lr = 0.001
     epoch_num = 100
-    loss_function = nn.MSELoss()
-    # loss_function = nn.CrossEntropyLoss()
+    # loss_function = nn.MSELoss()
+    loss_function = nn.CrossEntropyLoss()
     # loss_function = nn.BCELoss()
 
     optimizer = torch.optim.Adam(model.parameters(), lr=lr)
@@ -295,9 +295,9 @@ def train(model):
 
 
 def iii():
-    attribute_in_dic={0:'plane',1:'hex_groove',2:'cross_groove',3:'star_groove'}
+    attribute_in_dic={0:'hex',1:'round',2:'other1',3:'other2'}
     # model = torch.load('./checkpoint/reason_model_zero_1.0_4neg.pkl', map_location=torch.device(device))
-    model = torch.load('./checkpoint/net_in_img_97.pkl',map_location=torch.device(device))
+    model = torch.load('./checkpoint/4_97.pkl',map_location=torch.device(device))
     for i in range(len(attribute_in_dic)):
 
         infer_checkpoint(model,attribute_in_dic[i])
@@ -376,15 +376,14 @@ def infer_checkpoint(model,atribute_in):
     #         {'op':'exist', 'param': ''},
     # ]
 
-    
-
-    attribute_in2bolt={'plane':'out_hex_bolt','hex_groove':'in_hex_bolt','cross_groove':'cross_hex_bolt','star_groove':'star_bolt'}
-    attribute_in2index={'plane':2,'hex_groove':1,'cross_groove':0,'star_groove':3}
     op_list = [
             {'op': 'objects', 'param': ''},
             {'op':'filter_nearest_obj', 'param': ''},
-            {'op':'obj_attibute', 'param': attribute_in2index[atribute_in]}
+            {'op':'obj_attibute', 'param': ''}
     ]
+
+    attribute_in2bolt={'plane':'out_hex_bolt','hex_groove':'in_hex_bolt','cross_groove':'cross_hex_bolt','star_groove':'star_bolt'}
+    attribute_in2index={'plane':2,'hex_groove':1,'cross_groove':0,'star_groove':3}
     img_list = list(range(400, 430))
     # img_list = [1]
     print('[INFO]---------- 评分测试 ---------')
@@ -398,12 +397,11 @@ def infer_checkpoint(model,atribute_in):
         # ann_file = DATA_INPUT + 'Annotation/shut-' + str(img_id).zfill(3) + '.xml'
         # print(img_file)
         img = imgtool.load_img(img_file_path)
-        # img_file_path=""
-        y_pred = model(op_list, img,img_file_path, mode='test')
-        # max_val,index = torch.max(y_pred,dim=1)
+        y_pred = model(op_list, img,img_file_path, mode='infer')
+        max_val,index = torch.max(y_pred,dim=1)
         # print(index)
         tol_num+=1
-        if y_pred[0].data==1:
+        if index[0].data==attribute_in2index[atribute_in]:
             val_num+=1
         # print('[INFO] image:', img_id, 'attribute',y_pred)
     print('[INFO] attributu', atribute_in,'total num:', tol_num, 'correct num',val_num, 'accuracy',val_num/tol_num)
@@ -483,7 +481,7 @@ class TripleDataset(Dataset):
                     {"op": "objects", "param": ""},  # 获取所有物体
                     {"op": "filter_nearest_obj", "param": ""},  # 找到最近的物体
                     {"op": "obj_attibute", "param": triple[1]}],  # 通过filter判定该物体是否是triple中subject物体
-                "answer": 0,  # 答案就是triple中的subject
+                "answer": attribute_list,  # 答案就是triple中的subject
                 "type": "index"
             }
             questions_pos.append(question)
@@ -521,8 +519,8 @@ class TripleDataset(Dataset):
         if type == "index_neg":
             answer = torch.zeros(60)  # 构建一个所有物体都不被选中为0的向量
         else:
-            answer = self.eye_matrix[self.questions[index]['answer']] # 构建一个仅有答案obj为1其他均为0的向量
-            # answer = self.questions[index]['answer']
+            # answer = self.eye_matrix[self.questions[index]['answer']] # 构建一个仅有答案obj为1其他均为0的向量
+            answer = self.questions[index]['answer']
         # pic = '/yq/ddd/intel_amm_2/data-end2end-triple/images/shut-' + str(img_id).zfill(3) + '.jpg'
         # xml_path = '/yq/ddd/intel_amm_2/data-end2end-triple/Annotation/shut-' + str(img_id).zfill(3) + '.xml'
         # crop_and_filter_objects(pic, xml_path)
@@ -583,9 +581,9 @@ if __name__ == "__main__":
     args = get_args_parser()
     args = args.parse_args()
     # Model Load
-    model_in = Reasoning(args)
-    for name, param in model_in.named_parameters():
+    model_out_base_in = Reasoning(args)
+    for name, param in model_out_base_in.named_parameters():
         print(name, param.size(), type(param))
-    # train(model_in) # 训练流程
+    train(model_out_base_in) # 训练流程
     
     iii()  # 测试流程

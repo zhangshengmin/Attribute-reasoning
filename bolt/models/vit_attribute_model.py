@@ -45,6 +45,7 @@ class OnClassify_v3(nn.Module):
 
         for param in self.net.parameters():
             param.requires_grad = False
+            # param.requires_grad = True
 
         for param in [self.net.head.weight, self.net.head.bias, self.net.fc_norm.weight, self.net.fc_norm.bias]:
             param.requires_grad = True

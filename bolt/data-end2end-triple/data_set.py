@@ -22,9 +22,25 @@ for cla in bolt_class:
     n+=1
 images_path=['cross_hex_bolt','in_hex_bolt','out_hex_bolt','star_bolt']#change according to read order
 
-list_file = open('/home/ur/Desktop/attribute_infer/bolt/data-end2end-triple/true_mul_bolt_crops/attribute_in_test.tsv', 'w')
+list_file = open('/home/ur/Desktop/attribute_infer/bolt/data-end2end-triple/true_mul_bolt_crops/attribute_out_base_in_train.tsv', 'w')
+for i in range(350):
+    for j in range(4):
+        k=0
+        if j==0 or j==2 :
+           k=0
+        else:
+            k=1
+        # image = random.sample(images_type[j], k=1)
+        list_file.write('%s/%s %s\n'%(images_path[j],''+str(i).zfill(3)+'.jpg',k))
+list_file.close()
+list_file = open('/home/ur/Desktop/attribute_infer/bolt/data-end2end-triple/true_mul_bolt_crops/attribute_out_base_in_test.tsv', 'w')
 for i in range(50):
     for j in range(4):
+        k=0
+        if j==0 or j==2 :
+           k=0
+        else:
+            k=1
         # image = random.sample(images_type[j], k=1)
-        list_file.write('%s/%s %s\n'%(images_path[j],''+str(i+350).zfill(3)+'.jpg',j))
+        list_file.write('%s/%s %s\n'%(images_path[j],''+str(i+350).zfill(3)+'.jpg',k))
 list_file.close()
