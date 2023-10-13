@@ -583,9 +583,9 @@ if __name__ == "__main__":
     args = get_args_parser()
     args = args.parse_args()
     # Model Load
-    model_in = Reasoning(args)
-    for name, param in model_in.named_parameters():
-        print(name, param.size(), type(param))
+    # model_in = Reasoning(args)
+    # for name, param in model_in.named_parameters():
+    #     print(name, param.size(), type(param))
     # train(model_in) # 训练流程
     
     iii()  # 测试流程
